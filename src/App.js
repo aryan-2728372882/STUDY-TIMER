@@ -125,16 +125,6 @@ const initializeFirebase = async () => {
   });
 };
 
-// Helper function to create Firestore-compatible timestamp data
-const createTimestampData = () => {
-  const now = new Date();
-  return {
-    seconds: Math.floor(now.getTime() / 1000),
-    nanoseconds: (now.getTime() % 1000) * 1000000,
-    toDate: () => now
-  };
-};
-
 const StudyTimer = () => {
   // State
   const [user, setUser] = useState(null);
@@ -190,74 +180,6 @@ const StudyTimer = () => {
     }, 4000);
   }, []);
 
-  // Initialize Firebase
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const firebase = await initializeFirebase();
-        firebaseRef.current = firebase;
-        
-        // Set up auth state listener
-        firebase.auth().onAuthStateChanged(async (authUser) => {
-          if (authUser) {
-            setUser(authUser);
-            await loadUserData(authUser.uid);
-          } else {
-            setUser(null);
-          }
-          setLoading(false);
-        });
-
-        // Check theme preference
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const savedTheme = localStorage.getItem('studyTimerTheme');
-        setIsDark(savedTheme === 'dark' || (!savedTheme && prefersDark));
-        
-      } catch (err) {
-        console.error('Firebase initialization error:', err);
-        showToast('Working in offline mode', 'info');
-        setLoading(false);
-      }
-    };
-
-    init();
-  }, [showToast]);
-
-  // Theme effect
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-      localStorage.setItem('studyTimerTheme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-      localStorage.setItem('studyTimerTheme', 'light');
-    }
-  }, [isDark]);
-
-  // Timer effect
-  useEffect(() => {
-    if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        setTime(prev => {
-          if (prev + 1 >= MAX_SESSION_SECONDS) {
-            setIsRunning(false);
-            showToast('Maximum session length (12 hours) reached!', 'info');
-            return MAX_SESSION_SECONDS;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isRunning, showToast]);
-
   // Load user data with useCallback
   const loadUserData = useCallback(async (uid) => {
     if (!firebaseRef.current) {
@@ -284,7 +206,7 @@ const StudyTimer = () => {
         setTempDailyGoal((data.dailyGoal || 14400) / 3600);
         setTempWeeklyGoal((data.weeklyGoal || 72000) / 3600);
       } else {
-        // Create user document - FIXED: Use serverTimestamp() properly
+        // Create user document
         await db.collection('users').doc(uid).set({
           subjects: [],
           subjectStats: {},
@@ -320,6 +242,74 @@ const StudyTimer = () => {
       showToast('Failed to load data', 'error');
     }
   }, [isDark, showToast]);
+
+  // Initialize Firebase
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const firebase = await initializeFirebase();
+        firebaseRef.current = firebase;
+        
+        // Set up auth state listener
+        firebase.auth().onAuthStateChanged(async (authUser) => {
+          if (authUser) {
+            setUser(authUser);
+            await loadUserData(authUser.uid);
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+        });
+
+        // Check theme preference
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const savedTheme = localStorage.getItem('studyTimerTheme');
+        setIsDark(savedTheme === 'dark' || (!savedTheme && prefersDark));
+        
+      } catch (err) {
+        console.error('Firebase initialization error:', err);
+        showToast('Working in offline mode', 'info');
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, [showToast, loadUserData]); // Fixed: Added loadUserData dependency
+
+  // Theme effect
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('studyTimerTheme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+      localStorage.setItem('studyTimerTheme', 'light');
+    }
+  }, [isDark]);
+
+  // Timer effect
+  useEffect(() => {
+    if (isRunning) {
+      intervalRef.current = setInterval(() => {
+        setTime(prev => {
+          if (prev + 1 >= MAX_SESSION_SECONDS) {
+            setIsRunning(false);
+            showToast('Maximum session length (12 hours) reached!', 'info');
+            return MAX_SESSION_SECONDS;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isRunning, showToast]);
 
   // Add subject
   const addSubject = async () => {
@@ -381,7 +371,7 @@ const StudyTimer = () => {
     }
   };
 
-  // Save session - FIXED: Use proper Firestore timestamp
+  // Save session
   const saveSession = async (duration) => {
     if (!user || !currentSubject) {
       showToast('Cannot save session', 'error');
@@ -399,7 +389,7 @@ const StudyTimer = () => {
         throw new Error('Firestore not available');
       }
       
-      // Use Firestore's serverTimestamp() or create a proper timestamp
+      // Use Firestore's serverTimestamp()
       const timestamp = firebaseRef.current.firestore.FieldValue.serverTimestamp();
       const startTs = startTimeRef.current || timestamp;
 
@@ -452,7 +442,7 @@ const StudyTimer = () => {
     }
   };
 
-  // Timer controls - FIXED: Store Date instead of custom object
+  // Timer controls
   const handleStart = () => {
     if (!currentSubject) {
       showToast('Please select a subject first', 'error');
