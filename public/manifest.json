@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Study Timer",
+  "name": "Your Day To Day Study Manager",
   "icons": [
     {
       "src": "favicon.ico",
